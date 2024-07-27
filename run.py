@@ -1,6 +1,8 @@
 import inspect
 import json
 
+from flask import Flask, render_template
+
 
 def export_module_info(module):
   module_info = {
@@ -34,7 +36,42 @@ def start(lib):
   print(module_info)
 
   # start flask server
-  
 
 
-start(json)
+app = Flask(__name__)
+
+@app.route("/")
+def hello():
+  return render_template("index.html", modules=[
+    {
+      "name": "module1",
+      "classes": [
+        {
+          "name": "Class1",
+          "methods": [
+            {
+              "name": "method1",
+              "parameters": ["param1", "param2"]
+            }
+          ]
+        }
+      ],
+      "functions": [
+        {
+          "name": "function1",
+          "parameters": ["param1", "param2"]
+        }
+      ],
+      "variables": [
+        {
+          "name": "variable1",
+          "value": 1
+        }
+      ]
+    }
+  ])
+
+
+if __name__ == "__main__":
+  start(json)
+  app.run(port=5001, debug=True)
