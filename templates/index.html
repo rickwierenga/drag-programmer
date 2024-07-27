@@ -232,6 +232,20 @@
       function exportPython() {
         const blocks = document.querySelectorAll("#workspace .block");
         let code = "";
+
+        // gather modules
+        let modules = new Set();
+        for (let i = 0; i < blocks.length; i++) {
+          modules.add(blocks[i].dataset.moduleName);
+        }
+        modules = Array.from(modules).sort();
+        for (let i = 0; i < modules.length; i++) {
+          code += `import ${modules[i]}\n`;
+        }
+
+        code += "\n";
+
+        // write actual code
         blocks.forEach((block) => {
           const inputs = block.querySelectorAll("input");
           const values = Array.from(inputs).map(
