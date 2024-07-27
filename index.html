@@ -36,6 +36,38 @@
         margin-top: 10px;
       }
 
+      #modules .module {
+        margin-bottom: 10px;
+      }
+
+      .module-header {
+        cursor: pointer;
+        background-color: #f0f0f0;
+        padding: 5px;
+      }
+
+      .module-header i {
+        margin-right: 5px;
+      }
+
+      .module i.open {
+        display: inline-block;
+      }
+      .module i.close {
+        display: none;
+      }
+
+      .module.hidden i.open {
+        display: none;
+      }
+      .module.hidden i.close {
+        display: inline-block;
+      }
+
+      .module.hidden .blocks {
+        display: none;
+      }
+
       .container-fluid {
         padding: 10px;
       }
@@ -46,6 +78,10 @@
       rel="stylesheet"
       integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH"
       crossorigin="anonymous"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css"
     />
   </head>
   <body>
@@ -206,7 +242,14 @@
 
           const moduleHeader = document.createElement("div");
           moduleHeader.className = "module-header";
-          moduleHeader.textContent = moduleName;
+          // add icons for open/close
+          const openIcon = document.createElement("i");
+          openIcon.className = "bi bi-caret-down open";
+          moduleHeader.appendChild(openIcon);
+          const closeIcon = document.createElement("i");
+          closeIcon.className = "bi bi-caret-right close";
+          moduleHeader.appendChild(closeIcon);
+          moduleHeader.appendChild(document.createTextNode(moduleName));
           module.appendChild(moduleHeader);
 
           // Populate functions
@@ -217,7 +260,7 @@
 
           // Add collapse/expand functionality
           moduleHeader.onclick = () => {
-            blocksContainer.classList.toggle("collapse");
+            module.classList.toggle("hidden");
           };
         }
       }
