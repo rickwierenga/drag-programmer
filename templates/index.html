@@ -24,6 +24,9 @@
         height: 300px;
         overflow: auto;
       }
+      #workspace.drag-over {
+        border: 2px dashed #000;
+      }
       .input {
         margin: 0 5px;
         padding: 2px 4px;
@@ -72,11 +75,18 @@
         padding: 10px;
       }
 
+      .block .parameters {
+        display: inline;
+      }
+
       .param-holder {
-        /* soft yellow */
         background-color: #ffffcc;
         padding: 2px 4px;
         margin: 0 2px;
+      }
+
+      .param-holder.drag-over {
+        background-color: #ffcc00;
       }
     </style>
 
@@ -124,9 +134,7 @@
       <div class="block" draggable="true" data-type="function">
         <span class="function-name"></span>
         (
-        <span class="param-holder"></span>
-        ,
-        <span class="param-holder"></span>
+        <div class="parameters"></div>
         )
       </div>
     </template>
@@ -144,10 +152,12 @@
         constructor(type, moduleName) {
           this.type = type;
           this.moduleName = moduleName;
+          this.id = crypto.randomUUID();
         }
 
         serialize() {
           return {
+            id: this.id,
             type: this.type,
             moduleName: this.moduleName,
           };
@@ -166,14 +176,22 @@
         constructor(module, name, parameters) {
           super("function", module);
           this.name = name;
-          this.parameters = parameters;
+          this.parameters = parameters.map((param) => ({
+            id: crypto.randomUUID(),
+            name: param.name,
+            value: param.value,
+          }));
         }
 
         serialize() {
           return {
             ...super.serialize(),
             name: this.name,
-            parameters: this.parameters,
+            parameters: this.parameters.map((param) => ({
+              id: param.id,
+              name: param.name,
+              value: param.value,
+            })),
           };
         }
 
@@ -186,17 +204,42 @@
           block.dataset.data = JSON.stringify(this.serialize());
 
           block.querySelector(".function-name").textContent = this.name;
-          block.querySelectorAll(".param-holder").forEach((paramHolder, i) => {
-            if (this.parameters[i]) {
-              paramHolder.textContent = this.parameters[i];
+          const parameterEl = block.querySelector(".parameters");
+          for (
+            let paramIdx = 0;
+            paramIdx < this.parameters.length;
+            paramIdx++
+          ) {
+            let parameter = this.parameters[paramIdx];
+            const paramHolder = document.createElement("span");
+            if (parameter.value !== undefined) {
+              paramHolder.innerHTML = parameter.value.render().outerHTML;
+            } else {
+              paramHolder.classList.add("param-holder");
+              paramHolder.textContent = parameter.name;
             }
-          });
+            paramHolder.dataset.id = parameter.id;
+            paramHolder.ondragover = allowDrop;
+            paramHolder.ondrop = dropParam;
+            parameterEl.appendChild(paramHolder);
+
+            if (paramIdx < this.parameters.length - 1) {
+              parameterEl.appendChild(document.createTextNode(", "));
+            }
+          }
 
           return block;
         }
 
         writeLine() {
-          return `${this.module}.${this.name}(${this.parameters.join(", ")})\n`;
+          let parameterString = this.parameters.map((param) => {
+            if (param.value) {
+              return param.value.writeLine();
+            } else {
+              return param.name;
+            }
+          }).join(", ");
+          return `${this.moduleName}.${this.name}(${parameterString})`;
         }
       }
 
@@ -230,7 +273,7 @@
         }
 
         writeLine() {
-          return `${this.name} = ${this.value}\n`;
+          return `${this.name} = ${this.value}`;
         }
       }
     </script>
@@ -247,7 +290,14 @@
         // functions
         for (const functionData of moduleData.functions) {
           const { name, parameters } = functionData;
-          let functionBlock = new FunctionBlock(moduleData.name, name, parameters);
+          let functionBlock = new FunctionBlock(
+            moduleData.name,
+            name,
+            parameters.map((param) => ({
+              name: param,
+              value: undefined,
+            }))
+          );
           addBlockToSidebar(module, functionBlock);
         }
 
@@ -303,6 +353,13 @@
         exportPython(program);
       }
 
+      function resetDrag() {
+        document.getElementById("workspace").classList.remove("drag-over");
+        for (const paramHolder of document.querySelectorAll(".param-holder")) {
+          paramHolder.classList.remove("drag-over");
+        }
+      }
+
       function drag(ev) {
         const data = ev.target.dataset.data;
         ev.dataTransfer.setData("text/json", data);
@@ -310,33 +367,89 @@
 
       function allowDrop(ev) {
         ev.preventDefault();
-
-        if (ev.target.className === "block" || ev.target.id === "workspace") {
-          ev.target.style.background = "#f0f0f0"; // Example: Change background color
+        resetDrag();
+        if (ev.target.id === "workspace") {
+          document.getElementById("workspace").classList.add("drag-over");
+        } else if (ev.target.classList.contains("param-holder")) {
+          ev.target.classList.add("drag-over");
         }
       }
 
-      function drop(ev) {
-        ev.preventDefault();
-        const data = ev.dataTransfer.getData("text/json");
-        if (ev.target.id === "workspace") {
-          const blockData = JSON.parse(data);
-          let block;
-          if (blockData.type === "function") {
-            const { moduleName, name, parameters } = blockData;
-            block = new FunctionBlock(moduleName, name, parameters);
-          } else if (blockData.type === "variable") {
-            const { name, value } = blockData;
-            block = new VariableBlock(name, value);
-          } else {
-            console.error("Unknown block type", blockData);
-            return;
-          }
-          program.push(block);
-
-          renderWorkspace(program);
-          renderProgram(program);
+      function blockData2Block(blockData) {
+        let block;
+        if (blockData.type === "function") {
+          const { moduleName, name, parameters } = blockData;
+          block = new FunctionBlock(moduleName, name, parameters);
+        } else if (blockData.type === "variable") {
+          const { name, value } = blockData;
+          block = new VariableBlock(name, value);
+        } else {
+          throw new Error("Unknown block type", blockData);
         }
+        return block;
+      }
+
+      function dropWorkspace(ev) {
+        ev.preventDefault();
+        resetDrag();
+
+        if (ev.target.id !== "workspace") {
+          return;
+        }
+
+        const data = ev.dataTransfer.getData("text/json");
+        const blockData = JSON.parse(data);
+        block = blockData2Block(blockData);
+        program.push(block);
+
+        renderWorkspace(program);
+        renderProgram(program);
+      }
+
+      function findParamHolderById(id, blockList) {
+        for (const block of blockList) {
+          if (block.type !== "function") {
+            continue;
+          }
+
+          for (paramHolder of block.parameters.filter((param) => param.value === undefined)) {
+            if (paramHolder.id === id) {
+              return paramHolder;
+            }
+          }
+
+          const paramBlock = findParamHolderById(
+            id,
+            block.parameters.filter((param) => param.value).map((param) => param.value)
+          );
+          if (paramBlock) {
+            return paramBlock;
+          }
+        }
+        return null;
+      }
+
+      function dropParam(ev) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        resetDrag();
+
+        // get the block data
+        const data = ev.dataTransfer.getData("text/json");
+        const blockData = JSON.parse(data);
+
+        // get the param holder on which the block is dropped
+        const paramHolder = ev.target;
+        const paramId = paramHolder.dataset.id;
+
+        let block = findParamHolderById(paramId, program);
+        if (block) {
+          let newBlock = blockData2Block(blockData);
+          block.value = newBlock;
+        }
+
+        renderWorkspace(program);
+        renderProgram(program);
       }
 
       function exportPython(program) {
@@ -355,14 +468,15 @@
         code += "\n";
 
         for (let block of program) {
-          code += block.writeLine();
+          code += block.writeLine() + "\n";
         }
 
         document.getElementById("python-code").textContent = code;
       }
 
-      document.getElementById("workspace").ondrop = drop;
+      document.getElementById("workspace").ondrop = dropWorkspace;
       document.getElementById("workspace").ondragover = allowDrop;
+      document.getElementById("workspace").ondragleave = resetDrag;
     </script>
 
     <script
