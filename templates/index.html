@@ -27,10 +27,6 @@
       #workspace.drag-over {
         border: 2px dashed #000;
       }
-      .input {
-        margin: 0 5px;
-        padding: 2px 4px;
-      }
       code {
         display: block;
         white-space: pre-wrap;
@@ -80,13 +76,25 @@
       }
 
       .param-holder {
-        background-color: #ffffcc;
-        padding: 2px 4px;
-        margin: 0 2px;
+        border: 2px dashed #ff00ff;
+        border-radius: 10px;
+        padding: 5px 10px;
       }
 
       .param-holder.drag-over {
-        background-color: #ffcc00;
+        background-color: #ff00ff;
+      }
+
+      .block[data-type="assign-variable"] .variable-name-input,
+      .block-variable {
+        background-color: #ffccff;
+        border-radius: 10px;
+        border: 1px solid #ff00ff;
+        padding-left: 10px;
+      }
+      .block .block-variable {
+        display: inline-block;
+        padding: 5px 10px;
       }
     </style>
 
@@ -102,7 +110,6 @@
     />
   </head>
   <body>
-    <!-- simple blocks side by side -->
     <div class="container-fluid">
       <div class="row">
         <div id="modules" class="col-3"></div>
@@ -140,10 +147,24 @@
     </template>
 
     <template id="block-template-variable">
-      <div class="block" draggable="true" data-type="variable">
+      <div class="block block-variable" draggable="true" data-type="variable">
         <span class="variable-name"></span>
+      </div>
+    </template>
+
+    <template id="block-template-assign-variable">
+      <div class="block" draggable="true" data-type="assign-variable">
+        <input
+          class="variable-name-input"
+          type="text"
+          placeholder="variable name"
+        />
         =
-        <span class="variable-value"></span>
+        <input
+          class="variable-value-input"
+          type="text"
+          placeholder="variable value"
+        />
       </div>
     </template>
 
@@ -232,29 +253,25 @@
         }
 
         writeLine() {
-          let parameterString = this.parameters.map((param) => {
-            if (param.value) {
-              return param.value.writeLine();
-            } else {
-              return param.name;
-            }
-          }).join(", ");
+          let parameterString = this.parameters
+            .map((param) =>
+              param.value ? param.value.writeLine() : param.name
+            )
+            .join(", ");
           return `${this.moduleName}.${this.name}(${parameterString})`;
         }
       }
 
       class VariableBlock extends Block {
-        constructor(name, value) {
+        constructor(name) {
           super("variable", undefined);
           this.name = name;
-          this.value = value;
         }
 
         serialize() {
           return {
             ...super.serialize(),
             name: this.name,
-            value: this.value,
           };
         }
 
@@ -267,58 +284,132 @@
           block.dataset.data = JSON.stringify(this.serialize());
 
           block.querySelector(".variable-name").textContent = this.name;
-          block.querySelector(".variable-value").textContent = this.value;
 
           return block;
         }
 
         writeLine() {
-          return `${this.name} = ${this.value}`;
+          return this.name;
+        }
+      }
+
+      class VariableAssignmentBlock extends Block {
+        constructor(variable, value) {
+          super("assign-variable", undefined);
+          this.variable = variable;
+          this.value = value;
+        }
+
+        serialize() {
+          return {
+            ...super.serialize(),
+            variable: this.variable,
+            value: this.value,
+          };
+        }
+
+        render() {
+          const template = document.getElementById(
+            "block-template-assign-variable"
+          );
+          const block = template.content
+            .cloneNode(true)
+            .querySelector(".block");
+
+          block.dataset.data = JSON.stringify(this.serialize());
+
+          const nameInput = block.querySelector(".variable-name-input");
+          nameInput.onchange = (e) => {
+            this.variable.name = e.target.value;
+            renderWorkspace(program);
+            renderProgram(program);
+          };
+          if (this.variable) {
+            nameInput.value = this.variable.name;
+          }
+
+          const valueInput = block.querySelector(".variable-value-input");
+          valueInput.onchange = (e) => {
+            this.value = e.target.value;
+            renderWorkspace(program);
+            renderProgram(program);
+          };
+          if (this.value) {
+            block.querySelector(".variable-value-input").value = this.value;
+          }
+
+          return block;
+        }
+
+        writeLine() {
+          return `${this.variable.name} = ${this.value}`;
         }
       }
     </script>
 
     <script>
+      function addBlockToSidebar(module, block) {
+        const renderedBlock = block.render();
+        renderedBlock.ondragstart = dragFromSidebar;
+        module.querySelector(".blocks").appendChild(renderedBlock);
+      }
+
       function addModuleToSidebar(moduleData) {
         const template = document.getElementById("sidebar-module-template");
         const module = template.content
           .cloneNode(true)
           .querySelector(".module");
-
         module.querySelector(".module-name").textContent = moduleData.name;
 
         // functions
-        for (const functionData of moduleData.functions) {
-          const { name, parameters } = functionData;
-          let functionBlock = new FunctionBlock(
-            moduleData.name,
-            name,
-            parameters.map((param) => ({
-              name: param,
-              value: undefined,
-            }))
-          );
-          addBlockToSidebar(module, functionBlock);
+        if (moduleData.functions) {
+          for (const functionData of moduleData.functions) {
+            const { name, parameters } = functionData;
+            let functionBlock = new FunctionBlock(
+              moduleData.name,
+              name,
+              parameters.map((param) => ({
+                name: param,
+                value: undefined,
+              }))
+            );
+            addBlockToSidebar(module, functionBlock);
+          }
         }
 
         // variables
-        for (const variableData of moduleData.variables) {
-          const { name, value } = variableData;
-          let variableBlock = new VariableBlock(name, value);
-          addBlockToSidebar(module, variableBlock);
+        if (moduleData.variables) {
+          for (const variableData of moduleData.variables) {
+            const { name } = variableData;
+            let variableBlock = new VariableBlock(name);
+            addBlockToSidebar(module, variableBlock);
+          }
         }
 
         document.getElementById("modules").appendChild(module);
       }
 
-      function addBlockToSidebar(module, block) {
-        const renderedBlock = block.render();
-        renderedBlock.ondragstart = drag;
-        module.querySelector(".blocks").appendChild(renderedBlock);
+      let globalModule;
+      function addGlobalModule() {
+        const template = document.getElementById("sidebar-module-template");
+        globalModule = template.content
+          .cloneNode(true)
+          .querySelector(".module");
+        globalModule.querySelector(".module-name").textContent = "global";
+
+        let variableAssignmentBlock = new VariableAssignmentBlock(
+          undefined,
+          undefined
+        );
+        addBlockToSidebar(globalModule, variableAssignmentBlock);
+
+        document.getElementById("modules").appendChild(globalModule);
       }
 
       // load from /api
       function loadModules() {
+        addGlobalModule();
+
         fetch("/api")
           .then((response) => response.json())
           .then((data) => {
@@ -340,12 +431,23 @@
       // drag and drop
 
       let program = [];
+      let variables = [];
 
       function renderWorkspace(program) {
         document.getElementById("workspace").innerHTML = "";
         for (const block of program) {
           const blockElement = block.render();
           document.getElementById("workspace").appendChild(blockElement);
+        }
+
+        // remove all variables, to be re-added after this
+        for (const variableEl of globalModule.querySelectorAll(
+          ".block[data-type='variable']"
+        )) {
+          variableEl.remove();
+        }
+        for (const variableBlock of variables) {
+          addBlockToSidebar(globalModule, variableBlock);
         }
       }
 
@@ -360,29 +462,62 @@
         }
       }
 
-      function drag(ev) {
-        const data = ev.target.dataset.data;
-        ev.dataTransfer.setData("text/json", data);
+      const DRAG_EVENT_TYPE = {
+        NEW_BLOCK: "new-block",
+        // MOVE_BLOCK: "move-block",
+        USE_VARIABLE: "use-variable",
+      };
+
+      let dragEventData;
+
+      function dragFromSidebar(ev) {
+        if (ev.target.dataset.type === "variable") {
+          const blockData = JSON.parse(ev.target.dataset.data);
+          let variable = variables.find((v) => v.id === blockData.id);
+          dragEventData = {
+            type: DRAG_EVENT_TYPE.USE_VARIABLE,
+            variable: variable,
+          };
+        } else {
+          dragEventData = {
+            type: DRAG_EVENT_TYPE.NEW_BLOCK,
+            block_data: JSON.parse(ev.target.dataset.data),
+          };
+        }
       }
 
       function allowDrop(ev) {
         ev.preventDefault();
         resetDrag();
-        if (ev.target.id === "workspace") {
+        if (
+          ev.target.id === "workspace" &&
+          dragEventData.type === DRAG_EVENT_TYPE.NEW_BLOCK
+        ) {
           document.getElementById("workspace").classList.add("drag-over");
-        } else if (ev.target.classList.contains("param-holder")) {
+        } else if (
+          ev.target.classList.contains("param-holder") &&
+          dragEventData.type === DRAG_EVENT_TYPE.USE_VARIABLE
+        ) {
           ev.target.classList.add("drag-over");
         }
       }
 
-      function blockData2Block(blockData) {
+      function getNewUnusedVariableName() {
+        let i = 0;
+        while (variables.find((v) => v.name === `var${i}`)) i++;
+        return `var${i}`;
+      }
+
+      function createBlock(blockData) {
         let block;
         if (blockData.type === "function") {
           const { moduleName, name, parameters } = blockData;
           block = new FunctionBlock(moduleName, name, parameters);
-        } else if (blockData.type === "variable") {
-          const { name, value } = blockData;
-          block = new VariableBlock(name, value);
+        } else if (blockData.type === "assign-variable") {
+          const { variable, value } = blockData;
+          const variableBlock = new VariableBlock(getNewUnusedVariableName());
+          variables.push(variableBlock);
+          block = new VariableAssignmentBlock(variableBlock, value);
         } else {
           throw new Error("Unknown block type", blockData);
         }
@@ -397,30 +532,33 @@
           return;
         }
 
-        const data = ev.dataTransfer.getData("text/json");
-        const blockData = JSON.parse(data);
-        block = blockData2Block(blockData);
-        program.push(block);
+        if (dragEventData.type === DRAG_EVENT_TYPE.NEW_BLOCK) {
+          const blockData = dragEventData.block_data;
+          block = createBlock(blockData);
+          program.push(block);
 
-        renderWorkspace(program);
-        renderProgram(program);
+          renderWorkspace(program);
+          renderProgram(program);
+        } else {
+          console.error("Unknown drag event type", dragEventData);
+        }
       }
 
       function findParamHolderById(id, blockList) {
         for (const block of blockList) {
-          if (block.type !== "function") {
-            continue;
-          }
+          if (block.type !== "function") continue;
 
-          for (paramHolder of block.parameters.filter((param) => param.value === undefined)) {
-            if (paramHolder.id === id) {
-              return paramHolder;
-            }
+          for (paramHolder of block.parameters.filter(
+            (param) => param.value === undefined
+          )) {
+            if (paramHolder.id === id) return paramHolder;
           }
 
           const paramBlock = findParamHolderById(
             id,
-            block.parameters.filter((param) => param.value).map((param) => param.value)
+            block.parameters
+              .filter((param) => param.value)
+              .map((param) => param.value)
           );
           if (paramBlock) {
             return paramBlock;
@@ -434,22 +572,20 @@
         ev.stopPropagation();
         resetDrag();
 
-        // get the block data
-        const data = ev.dataTransfer.getData("text/json");
-        const blockData = JSON.parse(data);
+        if (dragEventData.type === DRAG_EVENT_TYPE.USE_VARIABLE) {
+          const paramHolder = ev.target;
+          const paramId = paramHolder.dataset.id;
 
-        // get the param holder on which the block is dropped
-        const paramHolder = ev.target;
-        const paramId = paramHolder.dataset.id;
+          let block = findParamHolderById(paramId, program);
+          if (block) {
+            block.value = dragEventData.variable;
+          }
 
-        let block = findParamHolderById(paramId, program);
-        if (block) {
-          let newBlock = blockData2Block(blockData);
-          block.value = newBlock;
+          renderWorkspace(program);
+          renderProgram(program);
+        } else {
+          console.error("Unknown drag event type", dragEventData);
         }
-
-        renderWorkspace(program);
-        renderProgram(program);
       }
 
       function exportPython(program) {
@@ -458,7 +594,9 @@
         // gather modules
         let modules = new Set();
         for (let block of program) {
-          modules.add(block.moduleName);
+          if (block.moduleName !== undefined) {
+            modules.add(block.moduleName);
+          }
         }
         modules = Array.from(modules).sort();
         for (let i = 0; i < modules.length; i++) {

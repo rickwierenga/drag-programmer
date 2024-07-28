@@ -48,19 +48,11 @@ def hello():
 def api():
   return json.dumps([
     {
-      "name": "module1",
+      "name": "math",
       "functions": [
-        {
-          "name": "function1",
-          "parameters": ["param1", "param2"]
-        }
+        { "name": "sqrt", "parameters": ["x"] },
+        { "name": "pow", "parameters": ["x", "y"] },
       ],
-      "variables": [
-        {
-          "name": "variable1",
-          "value": 1
-        }
-      ]
     },
   ])
 
