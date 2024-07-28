@@ -131,19 +131,6 @@
       </div>
     </template>
 
-    <template id="block-template-method">
-      <div class="block" draggable="true" data-type="method">
-        <span class="class-name"></span>
-        .
-        <span class="method-name"></span>
-        (
-        <span class="param-holder"></span>
-        ,
-        <span class="param-holder"></span>
-        )
-      </div>
-    </template>
-
     <template id="block-template-variable">
       <div class="block" draggable="true" data-type="variable">
         <span class="variable-name"></span>
@@ -153,9 +140,103 @@
     </template>
 
     <script>
-      function addModuleToSidebar(moduleData) {
-        console.log(moduleData);
+      class Block {
+        constructor(type, moduleName) {
+          this.type = type;
+          this.moduleName = moduleName;
+        }
 
+        serialize() {
+          return {
+            type: this.type,
+            moduleName: this.moduleName,
+          };
+        }
+
+        render() {
+          throw new Error("Not implemented");
+        }
+
+        writeLine() {
+          throw new Error("Not implemented");
+        }
+      }
+
+      class FunctionBlock extends Block {
+        constructor(module, name, parameters) {
+          super("function", module);
+          this.name = name;
+          this.parameters = parameters;
+        }
+
+        serialize() {
+          return {
+            ...super.serialize(),
+            name: this.name,
+            parameters: this.parameters,
+          };
+        }
+
+        render() {
+          const template = document.getElementById("block-template-function");
+          const block = template.content
+            .cloneNode(true)
+            .querySelector(".block");
+
+          block.dataset.data = JSON.stringify(this.serialize());
+
+          block.querySelector(".function-name").textContent = this.name;
+          block.querySelectorAll(".param-holder").forEach((paramHolder, i) => {
+            if (this.parameters[i]) {
+              paramHolder.textContent = this.parameters[i];
+            }
+          });
+
+          return block;
+        }
+
+        writeLine() {
+          return `${this.module}.${this.name}(${this.parameters.join(", ")})\n`;
+        }
+      }
+
+      class VariableBlock extends Block {
+        constructor(name, value) {
+          super("variable", undefined);
+          this.name = name;
+          this.value = value;
+        }
+
+        serialize() {
+          return {
+            ...super.serialize(),
+            name: this.name,
+            value: this.value,
+          };
+        }
+
+        render() {
+          const template = document.getElementById("block-template-variable");
+          const block = template.content
+            .cloneNode(true)
+            .querySelector(".block");
+
+          block.dataset.data = JSON.stringify(this.serialize());
+
+          block.querySelector(".variable-name").textContent = this.name;
+          block.querySelector(".variable-value").textContent = this.value;
+
+          return block;
+        }
+
+        writeLine() {
+          return `${this.name} = ${this.value}\n`;
+        }
+      }
+    </script>
+
+    <script>
+      function addModuleToSidebar(moduleData) {
         const template = document.getElementById("sidebar-module-template");
         const module = template.content
           .cloneNode(true)
@@ -165,50 +246,25 @@
 
         // functions
         for (const functionData of moduleData.functions) {
-          functionData.type = "function";
-          functionData.moduleName = module.name;
-          addFunctionBlockToSidebar(module, functionData);
-        }
-
-        // classes
-        for (const classData of moduleData.classes) {
-          for (const methodData of classData.methods) {
-            methodData.type = "method";
-            methodData.className = classData.name;
-            methodData.moduleName = moduleData.name;
-            addMethodBlockToSidebar(module, methodData);
-          }
+          const { name, parameters } = functionData;
+          let functionBlock = new FunctionBlock(moduleData.name, name, parameters);
+          addBlockToSidebar(module, functionBlock);
         }
 
         // variables
         for (const variableData of moduleData.variables) {
-          variableData.type = "variable";
-          variableData.moduleName = moduleData.name;
-          addVariableBlockToSidebar(module, variableData);
+          const { name, value } = variableData;
+          let variableBlock = new VariableBlock(name, value);
+          addBlockToSidebar(module, variableBlock);
         }
 
         document.getElementById("modules").appendChild(module);
       }
 
-      // loading data and adding to sidebar
       function addBlockToSidebar(module, block) {
-        block.ondragstart = drag;
-        module.querySelector(".blocks").appendChild(block);
-      }
-
-      function addFunctionBlockToSidebar(module, functionData) {
-        block = renderFunctionBlock(functionData);
-        addBlockToSidebar(module, block);
-      }
-
-      function addMethodBlockToSidebar(module, methodData) {
-        block = renderMethodBlock(methodData);
-        addBlockToSidebar(module, block);
-      }
-
-      function addVariableBlockToSidebar(module, variableData) {
-        block = renderVariableBlock(variableData);
-        addBlockToSidebar(module, block);
+        const renderedBlock = block.render();
+        renderedBlock.ondragstart = drag;
+        module.querySelector(".blocks").appendChild(renderedBlock);
       }
 
       // load from /api
@@ -231,77 +287,20 @@
     </script>
 
     <script>
-      // rendering block templates
-      function renderFunctionBlock(functionData) {
-        const { name: functionName, parameters } = functionData;
-
-        const template = document.getElementById("block-template-function");
-        const block = template.content.cloneNode(true).querySelector(".block");
-
-        block.dataset.data = JSON.stringify(functionData);
-        block.querySelector(".function-name").textContent = functionName;
-        block.querySelectorAll(".param-holder").forEach((paramHolder, i) => {
-          if (parameters[i]) {
-            paramHolder.textContent = parameters[i];
-          }
-        });
-
-        return block;
-      }
-
-      function renderMethodBlock(methodData) {
-        const { className, name: methodName, parameters } = methodData;
-
-        const template = document.getElementById("block-template-method");
-        const block = template.content.cloneNode(true).querySelector(".block");
-
-        block.dataset.data = JSON.stringify(methodData);
-
-        block.querySelector(".class-name").textContent = className;
-        block.querySelector(".method-name").textContent = methodName;
-        block.querySelectorAll(".param-holder").forEach((paramHolder, i) => {
-          if (parameters[i]) {
-            paramHolder.textContent = parameters[i];
-          }
-        });
-
-        return block;
-      }
-
-      function renderVariableBlock(variableData) {
-        const { name: variableName, value } = variableData;
-
-        const template = document.getElementById("block-template-variable");
-        const block = template.content.cloneNode(true).querySelector(".block");
-
-        block.dataset.data = JSON.stringify(variableData);
-
-        block.querySelector(".variable-name").textContent = variableName;
-        block.querySelector(".variable-value").textContent = value;
-
-        return block;
-      }
-    </script>
-
-    <script>
       // drag and drop
 
-      function addFunctionBlockToWorkspace(functionData) {
-        block = renderFunctionBlock(functionData);
-        document.getElementById("workspace").appendChild(block);
-        exportPython();
+      let program = [];
+
+      function renderWorkspace(program) {
+        document.getElementById("workspace").innerHTML = "";
+        for (const block of program) {
+          const blockElement = block.render();
+          document.getElementById("workspace").appendChild(blockElement);
+        }
       }
 
-      function addMethodBlockToWorkspace(methodData) {
-        block = renderMethodBlock(methodData);
-        document.getElementById("workspace").appendChild(block);
-        exportPython();
-      }
-
-      function addVariableBlockToWorkspace(variableData) {
-        block = renderVariableBlock(variableData);
-        document.getElementById("workspace").appendChild(block);
-        exportPython();
+      function renderProgram(program) {
+        exportPython(program);
       }
 
       function drag(ev) {
@@ -321,36 +320,32 @@
         ev.preventDefault();
         const data = ev.dataTransfer.getData("text/json");
         if (ev.target.id === "workspace") {
-          const { type } = JSON.parse(data);
-
-          if (type === "function") {
-            addFunctionBlockToWorkspace(JSON.parse(data));
-          } else if (type === "method") {
-            addMethodBlockToWorkspace(JSON.parse(data));
-          } else if (type === "variable") {
-            addVariableBlockToWorkspace(JSON.parse(data));
+          const blockData = JSON.parse(data);
+          let block;
+          if (blockData.type === "function") {
+            const { moduleName, name, parameters } = blockData;
+            block = new FunctionBlock(moduleName, name, parameters);
+          } else if (blockData.type === "variable") {
+            const { name, value } = blockData;
+            block = new VariableBlock(name, value);
           } else {
-            console.error("Unknown block type", data);
+            console.error("Unknown block type", blockData);
             return;
           }
+          program.push(block);
 
-          exportPython(); // Update Python code
-
-          // Add event listener to update Python code when the user edits the block
-          nodeCopy.addEventListener("input", exportPython);
+          renderWorkspace(program);
+          renderProgram(program);
         }
       }
 
-      function exportPython() {
-        const blocks = document.querySelectorAll("#workspace .block");
+      function exportPython(program) {
         let code = "";
 
         // gather modules
         let modules = new Set();
-        for (let i = 0; i < blocks.length; i++) {
-          const data = JSON.parse(blocks[i].dataset.data);
-          const { moduleName } = data;
-          modules.add(moduleName);
+        for (let block of program) {
+          modules.add(block.moduleName);
         }
         modules = Array.from(modules).sort();
         for (let i = 0; i < modules.length; i++) {
@@ -359,26 +354,10 @@
 
         code += "\n";
 
-        // write actual code
-        blocks.forEach((block) => {
-          const inputs = block.querySelectorAll("input");
-          const values = Array.from(inputs).map(
-            (input) => input.value || `"${input.placeholder}"`
-          );
-          const data = JSON.parse(block.dataset.data);
-          if (block.dataset.type === "function") {
-            const { moduleName, name } = data;
-            code += `${moduleName}.${name}(${values.join(", ")})\n`;
-          } else if (block.dataset.type === "method") {
-            const { moduleName, className, name: methodName } = data;
-            code += `${moduleName}.${className}.${methodName}(${values.join(
-              ", "
-            )})\n`;
-          } else if (block.dataset.type === "variable") {
-            const { name, value } = data;
-            code += `${name} = ${value}\n`;
-          }
-        });
+        for (let block of program) {
+          code += block.writeLine();
+        }
+
         document.getElementById("python-code").textContent = code;
       }
 

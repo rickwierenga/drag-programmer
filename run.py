@@ -49,17 +49,6 @@ def api():
   return json.dumps([
     {
       "name": "module1",
-      "classes": [
-        {
-          "name": "Class1",
-          "methods": [
-            {
-              "name": "method1",
-              "parameters": ["param1", "param2"]
-            }
-          ]
-        }
-      ],
       "functions": [
         {
           "name": "function1",
