@@ -201,6 +201,10 @@
         var data = ev.dataTransfer.getData("text/html");
         if (ev.target.id === "workspace" || ev.target.className === "block") {
           var data = ev.dataTransfer.getData("text/html");
+          
+          // remove <meta> tag from the data, for Chrome
+          data = data.replace(/<meta[^>]+>/, "");
+
           var tempDiv = document.createElement("div");
           tempDiv.innerHTML = data;
           var nodeCopy = tempDiv.firstChild;
