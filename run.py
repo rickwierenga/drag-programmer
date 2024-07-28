@@ -42,7 +42,11 @@ app = Flask(__name__)
 
 @app.route("/")
 def hello():
-  return render_template("index.html", modules=[
+  return render_template("index.html")
+
+@app.route("/api")
+def api():
+  return json.dumps([
     {
       "name": "module1",
       "classes": [
@@ -68,9 +72,8 @@ def hello():
           "value": 1
         }
       ]
-    }
+    },
   ])
-
 
 if __name__ == "__main__":
   start(json)

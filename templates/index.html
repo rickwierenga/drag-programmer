@@ -95,72 +95,7 @@
     <!-- simple blocks side by side -->
     <div class="container-fluid">
       <div class="row">
-        <div id="modules" class="col-3">
-          <!-- Modules will be populated here -->
-          {% for module in modules %}
-
-          <div class="module" draggable="true">
-            <div class="module-header" onclick="toggleModule(this)">
-              <i class="bi bi-caret-down open"></i>
-              <i class="bi bi-caret-right close"></i>
-              <span>{{ module.name }}</span>
-            </div>
-
-            <div class="blocks">
-              {% for function in module.functions %}
-              <div
-                class="block"
-                draggable="true"
-                data-type="function"
-                data-name="{{ function.name }}"
-                data-module-name="{{ module.name }}"
-                ondragstart="drag(event)"
-              >
-                Function: {{ function.name }}(
-                {% for param in function.parameters %}
-                <span class="param-holder">{{ param }}</span>
-                {% endfor %}
-                )
-              </div>
-              {% endfor %}
-
-              {% for variables in module.variables %}
-              <div
-                class="block"
-                draggable="true"
-                data-type="variable"
-                ondragstart="drag(event)"
-              >
-                Variable: {{ variables.name }}
-              </div>
-              {% endfor %}
-
-              {% for class in module.classes %}
-              {% for method in class.methods %}
-              <div
-                class="block"
-                draggable="true"
-                data-type="method"
-                data-module-name="{{ module.name }}"
-                data-class="{{ class.name }}"
-                data-method="{{ method.name }}"
-                ondragstart="drag(event)"
-              >
-                Method: {{ class.name }}.{{ method.name }}(
-                {% for param in method.parameters %}
-                <span class="param-holder">{{ param }}</span>
-                {% endfor %}
-                )
-              </div>
-              {% endfor %}
-              {% endfor %}
-            </div>
-          </div>
-
-          {% endfor %}
-
-          <!-- Each module will contain blocks -->
-        </div>
+        <div id="modules" class="col-3"></div>
 
         <div class="col-9">
           <div id="workspace">
@@ -171,21 +106,207 @@
       </div>
     </div>
 
-    <style>
-      /* Add style for input fields within blocks */
-      .input {
-        margin: 0 5px;
-        padding: 2px 4px;
-      }
-    </style>
+    <!-- templates -->
+
+    <template id="sidebar-module-template">
+      <div class="module">
+        <div class="module-header" onclick="toggleModule(this)">
+          <i class="bi bi-caret-down open"></i>
+          <i class="bi bi-caret-right close"></i>
+          <span class="module-name"></span>
+        </div>
+
+        <div class="blocks"></div>
+      </div>
+    </template>
+
+    <template id="block-template-function">
+      <div class="block" draggable="true" data-type="function">
+        <span class="function-name"></span>
+        (
+        <span class="param-holder"></span>
+        ,
+        <span class="param-holder"></span>
+        )
+      </div>
+    </template>
+
+    <template id="block-template-method">
+      <div class="block" draggable="true" data-type="method">
+        <span class="class-name"></span>
+        .
+        <span class="method-name"></span>
+        (
+        <span class="param-holder"></span>
+        ,
+        <span class="param-holder"></span>
+        )
+      </div>
+    </template>
+
+    <template id="block-template-variable">
+      <div class="block" draggable="true" data-type="variable">
+        <span class="variable-name"></span>
+        =
+        <span class="variable-value"></span>
+      </div>
+    </template>
+
     <script>
+      function addModuleToSidebar(moduleData) {
+        console.log(moduleData);
+
+        const template = document.getElementById("sidebar-module-template");
+        const module = template.content
+          .cloneNode(true)
+          .querySelector(".module");
+
+        module.querySelector(".module-name").textContent = moduleData.name;
+
+        // functions
+        for (const functionData of moduleData.functions) {
+          functionData.type = "function";
+          functionData.moduleName = module.name;
+          addFunctionBlockToSidebar(module, functionData);
+        }
+
+        // classes
+        for (const classData of moduleData.classes) {
+          for (const methodData of classData.methods) {
+            methodData.type = "method";
+            methodData.className = classData.name;
+            methodData.moduleName = moduleData.name;
+            addMethodBlockToSidebar(module, methodData);
+          }
+        }
+
+        // variables
+        for (const variableData of moduleData.variables) {
+          variableData.type = "variable";
+          variableData.moduleName = moduleData.name;
+          addVariableBlockToSidebar(module, variableData);
+        }
+
+        document.getElementById("modules").appendChild(module);
+      }
+
+      // loading data and adding to sidebar
+      function addBlockToSidebar(module, block) {
+        block.ondragstart = drag;
+        module.querySelector(".blocks").appendChild(block);
+      }
+
+      function addFunctionBlockToSidebar(module, functionData) {
+        block = renderFunctionBlock(functionData);
+        addBlockToSidebar(module, block);
+      }
+
+      function addMethodBlockToSidebar(module, methodData) {
+        block = renderMethodBlock(methodData);
+        addBlockToSidebar(module, block);
+      }
+
+      function addVariableBlockToSidebar(module, variableData) {
+        block = renderVariableBlock(variableData);
+        addBlockToSidebar(module, block);
+      }
+
+      // load from /api
+      function loadModules() {
+        fetch("/api")
+          .then((response) => response.json())
+          .then((data) => {
+            for (const module of data) {
+              addModuleToSidebar(module);
+            }
+          });
+      }
+
+      window.onload = loadModules;
+
       function toggleModule(moduleHeader) {
         const module = moduleHeader.parentElement;
         module.classList.toggle("hidden");
       }
+    </script>
+
+    <script>
+      // rendering block templates
+      function renderFunctionBlock(functionData) {
+        const { name: functionName, parameters } = functionData;
+
+        const template = document.getElementById("block-template-function");
+        const block = template.content.cloneNode(true).querySelector(".block");
+
+        block.dataset.data = JSON.stringify(functionData);
+        block.querySelector(".function-name").textContent = functionName;
+        block.querySelectorAll(".param-holder").forEach((paramHolder, i) => {
+          if (parameters[i]) {
+            paramHolder.textContent = parameters[i];
+          }
+        });
+
+        return block;
+      }
+
+      function renderMethodBlock(methodData) {
+        const { className, name: methodName, parameters } = methodData;
+
+        const template = document.getElementById("block-template-method");
+        const block = template.content.cloneNode(true).querySelector(".block");
+
+        block.dataset.data = JSON.stringify(methodData);
+
+        block.querySelector(".class-name").textContent = className;
+        block.querySelector(".method-name").textContent = methodName;
+        block.querySelectorAll(".param-holder").forEach((paramHolder, i) => {
+          if (parameters[i]) {
+            paramHolder.textContent = parameters[i];
+          }
+        });
+
+        return block;
+      }
+
+      function renderVariableBlock(variableData) {
+        const { name: variableName, value } = variableData;
+
+        const template = document.getElementById("block-template-variable");
+        const block = template.content.cloneNode(true).querySelector(".block");
+
+        block.dataset.data = JSON.stringify(variableData);
+
+        block.querySelector(".variable-name").textContent = variableName;
+        block.querySelector(".variable-value").textContent = value;
+
+        return block;
+      }
+    </script>
+
+    <script>
+      // drag and drop
+
+      function addFunctionBlockToWorkspace(functionData) {
+        block = renderFunctionBlock(functionData);
+        document.getElementById("workspace").appendChild(block);
+        exportPython();
+      }
+
+      function addMethodBlockToWorkspace(methodData) {
+        block = renderMethodBlock(methodData);
+        document.getElementById("workspace").appendChild(block);
+        exportPython();
+      }
+
+      function addVariableBlockToWorkspace(variableData) {
+        block = renderVariableBlock(variableData);
+        document.getElementById("workspace").appendChild(block);
+        exportPython();
+      }
 
       function drag(ev) {
-        ev.dataTransfer.setData("text/html", ev.target.outerHTML); // Use outerHTML to include element markup
+        const data = ev.target.dataset.data;
+        ev.dataTransfer.setData("text/json", data);
       }
 
       function allowDrop(ev) {
@@ -198,32 +319,19 @@
 
       function drop(ev) {
         ev.preventDefault();
-        var data = ev.dataTransfer.getData("text/html");
-        if (ev.target.id === "workspace" || ev.target.className === "block") {
-          var data = ev.dataTransfer.getData("text/html");
-          
-          // remove <meta> tag from the data, for Chrome
-          data = data.replace(/<meta[^>]+>/, "");
+        const data = ev.dataTransfer.getData("text/json");
+        if (ev.target.id === "workspace") {
+          const { type } = JSON.parse(data);
 
-          var tempDiv = document.createElement("div");
-          tempDiv.innerHTML = data;
-          var nodeCopy = tempDiv.firstChild;
-
-          // Check if dropping on another block or just in the workspace
-          if (ev.target.className === "block") {
-            // Determine cursor position to drop before or after
-            const targetRect = ev.target.getBoundingClientRect();
-            const dropPosition = ev.clientY - targetRect.top;
-            if (dropPosition < targetRect.height / 2) {
-              ev.target.parentNode.insertBefore(nodeCopy, ev.target); // Drop before
-            } else {
-              ev.target.parentNode.insertBefore(
-                nodeCopy,
-                ev.target.nextSibling
-              ); // Drop after
-            }
+          if (type === "function") {
+            addFunctionBlockToWorkspace(JSON.parse(data));
+          } else if (type === "method") {
+            addMethodBlockToWorkspace(JSON.parse(data));
+          } else if (type === "variable") {
+            addVariableBlockToWorkspace(JSON.parse(data));
           } else {
-            ev.target.appendChild(nodeCopy);
+            console.error("Unknown block type", data);
+            return;
           }
 
           exportPython(); // Update Python code
@@ -240,7 +348,9 @@
         // gather modules
         let modules = new Set();
         for (let i = 0; i < blocks.length; i++) {
-          modules.add(blocks[i].dataset.moduleName);
+          const data = JSON.parse(blocks[i].dataset.data);
+          const { moduleName } = data;
+          modules.add(moduleName);
         }
         modules = Array.from(modules).sort();
         for (let i = 0; i < modules.length; i++) {
@@ -255,16 +365,18 @@
           const values = Array.from(inputs).map(
             (input) => input.value || `"${input.placeholder}"`
           );
+          const data = JSON.parse(block.dataset.data);
           if (block.dataset.type === "function") {
-            code += `${block.dataset.moduleName}.${
-              block.dataset.name
-            }(${values.join(", ")})\n`;
+            const { moduleName, name } = data;
+            code += `${moduleName}.${name}(${values.join(", ")})\n`;
           } else if (block.dataset.type === "method") {
-            code += `${block.dataset.moduleName}.${block.dataset.class}.${
-              block.dataset.method
-            }(${values.join(", ")})\n`;
+            const { moduleName, className, name: methodName } = data;
+            code += `${moduleName}.${className}.${methodName}(${values.join(
+              ", "
+            )})\n`;
           } else if (block.dataset.type === "variable") {
-            code += `${values[0]} = ${values[1]}\n`;
+            const { name, value } = data;
+            code += `${name} = ${value}\n`;
           }
         });
         document.getElementById("python-code").textContent = code;
