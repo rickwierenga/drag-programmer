@@ -173,6 +173,7 @@ class VariableAssignmentBlock extends Block {
     if (this.variable) {
       nameInput.value = this.variable.name;
     }
+    nameInput.ondrop = dropAssignmentLHS;
 
     const expressionEl = block.querySelector(".expression");
     const valueInput = block.querySelector(".variable-value-input");
@@ -189,7 +190,7 @@ class VariableAssignmentBlock extends Block {
         block.querySelector(".variable-value-input").value = this.value;
       }
       expressionEl.style.display = "none";
-      valueInput.ondrop = dropAssignment;
+      valueInput.ondrop = dropAssignmentRHS;
     }
 
     return block;
@@ -631,7 +632,28 @@ function dropBlock(ev) {
   }
 }
 
-function dropAssignment(ev) {
+function dropAssignmentLHS(ev) {
+  ev.preventDefault();
+  resetDrag();
+
+  if (dragEventData.type === DRAG_EVENT_TYPE.USE_VARIABLE) {
+    // overwrite variable
+    const inputField = ev.target;
+    const assignmentBlockEl = inputField.parentElement;
+    const assignmentBlockData = JSON.parse(assignmentBlockEl.dataset.data);
+    const assignmentBlock = program.find(
+      (block) => block.id === assignmentBlockData.id
+    );
+    assignmentBlock.variable = dragEventData.variable;
+
+    renderWorkspace(program);
+    renderProgram(program);
+  } else {
+    console.error("Unknown drag event type", dragEventData);
+  }
+}
+
+function dropAssignmentRHS(ev) {
   ev.preventDefault();
   resetDrag();
 
