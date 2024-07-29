@@ -85,7 +85,7 @@
         background-color: #ff00ff;
       }
 
-      .block[data-type="assign-variable"] .variable-name-input,
+      .block .variable-name-input,
       .block-variable {
         background-color: #ffccff;
         border-radius: 10px;
@@ -95,6 +95,19 @@
       .block .block-variable {
         display: inline-block;
         padding: 5px 10px;
+      }
+
+      .block-range-for-loop .code-holder {
+        padding: 10px;
+        border: 1px dashed black;
+        margin-top: 10px;
+      }
+      .block-range-for-loop .code-holder .no-code {
+        padding: 20px;
+      }
+      .block-range-for-loop.drag-over .code-holder {
+        background-color: #f0f0f0;
+        border: 2px dashed black;
       }
     </style>
 
@@ -168,12 +181,41 @@
       </div>
     </template>
 
+    <template id="block-template-range-for-loop">
+      <div
+        class="block block-range-for-loop"
+        draggable="true"
+        data-type="range-for-loop"
+      >
+        for
+        <input
+          class="variable-name-input"
+          type="text"
+          placeholder="variable name"
+        />
+        in range(
+        <span class="param-holder-start"></span>
+        ,
+        <span class="param-holder-end"></span>
+        ):
+
+        <div class="code-holder">
+          <div class="no-code">
+            <i class="bi bi-plus-square"></i>
+            add code here
+          </div>
+        </div>
+      </div>
+    </template>
+
     <script>
       class Block {
         constructor(type, moduleName) {
           this.type = type;
           this.moduleName = moduleName;
           this.id = crypto.randomUUID();
+          this.children = [];
+          this.parameters = [];
         }
 
         serialize() {
@@ -181,6 +223,7 @@
             id: this.id,
             type: this.type,
             moduleName: this.moduleName,
+            children: this.children.map((child) => child.serialize()),
           };
         }
 
@@ -188,8 +231,40 @@
           throw new Error("Not implemented");
         }
 
-        writeLine() {
+        writeCode() {
           throw new Error("Not implemented");
+        }
+      }
+
+      class ParameterHolder {
+        constructor(id, name, value) {
+          this.id = id;
+          this.name = name;
+          this.value = value;
+        }
+
+        serialize() {
+          return {
+            id: this.id,
+            name: this.name,
+            value: this.value ? this.value.serialize() : undefined,
+          };
+        }
+
+        render() {
+          const paramHolder = document.createElement("span");
+          if (this.value !== undefined) {
+            paramHolder.innerHTML = this.value.render().outerHTML;
+          } else {
+            paramHolder.classList.add("param-holder");
+            paramHolder.textContent = this.name;
+          }
+          paramHolder.dataset.id = this.id;
+          return paramHolder;
+        }
+
+        writeCode() {
+          return this.value ? this.value.writeCode() : this.name;
         }
       }
 
@@ -197,11 +272,10 @@
         constructor(module, name, parameters) {
           super("function", module);
           this.name = name;
-          this.parameters = parameters.map((param) => ({
-            id: crypto.randomUUID(),
-            name: param.name,
-            value: param.value,
-          }));
+          this.parameters = parameters.map(
+            (param) =>
+              new ParameterHolder(crypto.randomUUID(), param.name, param.value)
+          );
         }
 
         serialize() {
@@ -232,17 +306,7 @@
             paramIdx++
           ) {
             let parameter = this.parameters[paramIdx];
-            const paramHolder = document.createElement("span");
-            if (parameter.value !== undefined) {
-              paramHolder.innerHTML = parameter.value.render().outerHTML;
-            } else {
-              paramHolder.classList.add("param-holder");
-              paramHolder.textContent = parameter.name;
-            }
-            paramHolder.dataset.id = parameter.id;
-            paramHolder.ondragover = allowDrop;
-            paramHolder.ondrop = dropParam;
-            parameterEl.appendChild(paramHolder);
+            parameterEl.appendChild(parameter.render());
 
             if (paramIdx < this.parameters.length - 1) {
               parameterEl.appendChild(document.createTextNode(", "));
@@ -252,13 +316,12 @@
           return block;
         }
 
-        writeLine() {
+        writeCode() {
+          let modulePrefix = this.moduleName ? `${this.moduleName}.` : "";
           let parameterString = this.parameters
-            .map((param) =>
-              param.value ? param.value.writeLine() : param.name
-            )
+            .map((param) => param.writeCode())
             .join(", ");
-          return `${this.moduleName}.${this.name}(${parameterString})`;
+          return `${this.name}(${parameterString})`;
         }
       }
 
@@ -288,7 +351,7 @@
           return block;
         }
 
-        writeLine() {
+        writeCode() {
           return this.name;
         }
       }
@@ -341,8 +404,96 @@
           return block;
         }
 
-        writeLine() {
+        writeCode() {
           return `${this.variable.name} = ${this.value}`;
+        }
+      }
+
+      class RangeForLoopBlock extends Block {
+        constructor(loop_variable) {
+          super("range-for-loop", undefined);
+          this.loop_variable = loop_variable;
+          this.start_variable = new ParameterHolder(
+            crypto.randomUUID(),
+            "start",
+            undefined
+          );
+          this.end_variable = new ParameterHolder(
+            crypto.randomUUID(),
+            "end",
+            undefined
+          );
+          this.parameters = [this.start_variable, this.end_variable];
+        }
+
+        serialize() {
+          return {
+            ...super.serialize(),
+            variable: this.variable,
+            start: this.start_variable.serialize(),
+            end: this.end_variable.serialize(),
+          };
+        }
+
+        render() {
+          const template = document.getElementById(
+            "block-template-range-for-loop"
+          );
+          const block = template.content
+            .cloneNode(true)
+            .querySelector(".block");
+
+          block.dataset.data = JSON.stringify(this.serialize());
+
+          const nameInput = block.querySelector(".variable-name-input");
+          nameInput.onchange = (e) => {
+            this.loop_variable.name = e.target.value;
+            renderWorkspace(program);
+            renderProgram(program);
+          };
+          if (this.loop_variable) {
+            nameInput.value = this.loop_variable.name;
+          }
+
+          const startParamHolder = block.querySelector(".param-holder-start");
+          if (this.start_variable) {
+            startParamHolder.innerHTML = this.start_variable.render().outerHTML;
+          } else {
+            startParamHolder.textContent = "start";
+          }
+
+          const endParamHolder = block.querySelector(".param-holder-end");
+          // endParamHolder.dataset.id =
+          if (this.end_variable) {
+            endParamHolder.innerHTML = this.end_variable.render().outerHTML;
+          } else {
+            endParamHolder.textContent = "end";
+          }
+
+          let codeHolder = block.querySelector(".code-holder");
+          if (this.children.length > 0) {
+            codeHolder.querySelector(".no-code").style.display = "none";
+            codeHolder.innerHTML = "";
+            for (const child of this.children) {
+              codeHolder.appendChild(child.render());
+            }
+          } else {
+            codeHolder.querySelector(".no-code").style.display = "block";
+          }
+
+          block.ondragover = allowDrop;
+          block.ondrop = dropBlock;
+
+          return block;
+        }
+
+        writeCode() {
+          const body = this.children
+            .map((child) => child.writeCode())
+            .join("\n  ");
+          return `for ${
+            this.loop_variable.name
+          } in range(${this.start_variable.writeCode()}, ${this.end_variable.writeCode()}):\n  ${body}`;
         }
       }
     </script>
@@ -403,6 +554,14 @@
         );
         addBlockToSidebar(globalModule, variableAssignmentBlock);
 
+        let rangeForLoopBlock = new RangeForLoopBlock(undefined);
+        addBlockToSidebar(globalModule, rangeForLoopBlock);
+
+        let printBlock = new FunctionBlock(undefined, "print", [
+          { name: "value", value: undefined },
+        ]);
+        addBlockToSidebar(globalModule, printBlock);
+
         document.getElementById("modules").appendChild(globalModule);
       }
 
@@ -437,6 +596,13 @@
         document.getElementById("workspace").innerHTML = "";
         for (const block of program) {
           const blockElement = block.render();
+          // add drag events
+          for (let paramHolder of blockElement.querySelectorAll(
+            ".param-holder"
+          )) {
+            paramHolder.ondragover = allowDrop;
+            paramHolder.ondrop = dropParam;
+          }
           document.getElementById("workspace").appendChild(blockElement);
         }
 
@@ -490,10 +656,11 @@
         ev.preventDefault();
         resetDrag();
         if (
-          ev.target.id === "workspace" &&
+          (ev.target.id === "workspace" ||
+            ev.target.dataset.type === "range-for-loop") &&
           dragEventData.type === DRAG_EVENT_TYPE.NEW_BLOCK
         ) {
-          document.getElementById("workspace").classList.add("drag-over");
+          ev.target.classList.add("drag-over");
         } else if (
           ev.target.classList.contains("param-holder") &&
           dragEventData.type === DRAG_EVENT_TYPE.USE_VARIABLE
@@ -518,6 +685,10 @@
           const variableBlock = new VariableBlock(getNewUnusedVariableName());
           variables.push(variableBlock);
           block = new VariableAssignmentBlock(variableBlock, value);
+        } else if (blockData.type === "range-for-loop") {
+          const loopVariable = new VariableBlock(getNewUnusedVariableName());
+          block = new RangeForLoopBlock(loopVariable);
+          variables.push(loopVariable);
         } else {
           throw new Error("Unknown block type", blockData);
         }
@@ -546,11 +717,7 @@
 
       function findParamHolderById(id, blockList) {
         for (const block of blockList) {
-          if (block.type !== "function") continue;
-
-          for (paramHolder of block.parameters.filter(
-            (param) => param.value === undefined
-          )) {
+          for (paramHolder of block.parameters) {
             if (paramHolder.id === id) return paramHolder;
           }
 
@@ -559,10 +726,25 @@
             block.parameters
               .filter((param) => param.value)
               .map((param) => param.value)
+              .concat(block.children)
           );
-          if (paramBlock) {
-            return paramBlock;
-          }
+          if (paramBlock) return paramBlock;
+        }
+        return null;
+      }
+
+      function findBlock(id, blockList) {
+        for (const block of blockList) {
+          if (block.id === id) return block;
+
+          const childBlock = findBlock(
+            id,
+            block.parameters
+              .filter((param) => param.value)
+              .map((param) => param.value)
+              .concat(block.children)
+          );
+          if (childBlock) return childBlock;
         }
         return null;
       }
@@ -580,6 +762,32 @@
           if (block) {
             block.value = dragEventData.variable;
           }
+
+          renderWorkspace(program);
+          renderProgram(program);
+        } else {
+          console.error("Unknown drag event type", dragEventData);
+        }
+      }
+
+      function dropBlock(ev) {
+        ev.preventDefault();
+        resetDrag();
+
+        if (dragEventData.type === DRAG_EVENT_TYPE.NEW_BLOCK) {
+          const blockData = dragEventData.block_data;
+          block = createBlock(blockData);
+
+          // get target block
+          let eventTarget = ev.target;
+          while (!eventTarget.dataset || !eventTarget.dataset.data) {
+            eventTarget = eventTarget.parentElement;
+          }
+          const { id } = JSON.parse(eventTarget.dataset.data);
+          let targetBlock = findBlock(id, program);
+
+          // add block to target block
+          targetBlock.children.push(block);
 
           renderWorkspace(program);
           renderProgram(program);
@@ -606,7 +814,7 @@
         code += "\n";
 
         for (let block of program) {
-          code += block.writeLine() + "\n";
+          code += block.writeCode() + "\n";
         }
 
         document.getElementById("python-code").textContent = code;
