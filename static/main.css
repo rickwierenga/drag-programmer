@@ -66,13 +66,13 @@ code {
   display: inline;
 }
 
-.param-holder {
+.param-holder.no-child {
   border: 2px dashed #ff00ff;
   border-radius: 10px;
   padding: 5px 10px;
 }
 
-.param-holder.drag-over {
+.param-holder.no-child.drag-over {
   background-color: #ff00ff;
 }
 
@@ -86,6 +86,9 @@ code {
 .block .block-variable {
   display: inline-block;
   padding: 5px 10px;
+}
+.block-variable.drag-over {
+  border: 2px dashed #ff00ff;
 }
 
 .block-range-for-loop .code-holder {

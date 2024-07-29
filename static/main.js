@@ -42,10 +42,11 @@ class ParameterHolder {
 
   render() {
     const paramHolder = document.createElement("span");
+    paramHolder.classList.add("param-holder");
     if (this.value !== undefined) {
-      paramHolder.innerHTML = this.value.render().outerHTML;
+      paramHolder.appendChild(this.value.render());
     } else {
-      paramHolder.classList.add("param-holder");
+      paramHolder.classList.add("no-child");
       paramHolder.textContent = this.name;
     }
     paramHolder.dataset.id = this.id;
@@ -71,11 +72,7 @@ class FunctionBlock extends Block {
     return {
       ...super.serialize(),
       name: this.name,
-      parameters: this.parameters.map((param) => ({
-        id: param.id,
-        name: param.name,
-        value: param.value,
-      })),
+      parameters: this.parameters.map((param) => param.serialize()),
     };
   }
 
@@ -104,7 +101,7 @@ class FunctionBlock extends Block {
     let parameterString = this.parameters
       .map((param) => param.writeCode())
       .join(", ");
-    return `${this.name}(${parameterString})`;
+    return `${modulePrefix}${this.name}(${parameterString})`;
   }
 }
 
@@ -126,7 +123,8 @@ class VariableBlock extends Block {
     const block = template.content.cloneNode(true).querySelector(".block");
 
     block.dataset.data = JSON.stringify(this.serialize());
-
+    block.ondragover = allowDrop;
+    block.ondrop = dropVariable;
     block.querySelector(".variable-name").textContent = this.name;
 
     return block;
@@ -173,7 +171,7 @@ class VariableAssignmentBlock extends Block {
     const expressionEl = block.querySelector(".expression");
     const valueInput = block.querySelector(".variable-value-input");
     if (this.expression) {
-      expressionEl.innerHTML = this.expression.render().outerHTML;
+      expressionEl.appendChild(this.expression.render());
       valueInput.style.display = "none";
     } else {
       valueInput.onchange = (e) => {
@@ -241,15 +239,14 @@ class RangeForLoopBlock extends Block {
 
     const startParamHolder = block.querySelector(".param-holder-start");
     if (this.start_variable) {
-      startParamHolder.innerHTML = this.start_variable.render().outerHTML;
+      startParamHolder.appendChild(this.start_variable.render());
     } else {
       startParamHolder.textContent = "start";
     }
 
     const endParamHolder = block.querySelector(".param-holder-end");
-    // endParamHolder.dataset.id =
     if (this.end_variable) {
-      endParamHolder.innerHTML = this.end_variable.render().outerHTML;
+      endParamHolder.appendChild(this.end_variable.render());
     } else {
       endParamHolder.textContent = "end";
     }
@@ -400,6 +397,9 @@ function resetDrag() {
   for (const paramHolder of document.querySelectorAll(".param-holder")) {
     paramHolder.classList.remove("drag-over");
   }
+  for (const paramHolder of document.querySelectorAll(".block-variable")) {
+    paramHolder.classList.remove("drag-over");
+  }
 }
 
 const DRAG_EVENT_TYPE = {
@@ -440,6 +440,13 @@ function allowDrop(ev) {
     dragEventData.type === DRAG_EVENT_TYPE.USE_VARIABLE
   ) {
     ev.target.classList.add("drag-over");
+  } else if (
+    (ev.target.classList.contains("block-variable") ||
+      ev.target.parentElement.classList.contains("block-variable")) &&
+    dragEventData.type === DRAG_EVENT_TYPE.USE_VARIABLE
+  ) {
+    let target = ev.target.classList.contains("block-variable") ? ev.target : ev.target.parentElement;
+    target.classList.add("drag-over");
   }
 }
 
@@ -593,6 +600,23 @@ function dropAssignment(ev) {
 
   renderWorkspace(program);
   renderProgram(program);
+}
+
+function dropVariable(ev) {
+  ev.preventDefault();
+  resetDrag();
+
+  if (dragEventData.type === DRAG_EVENT_TYPE.USE_VARIABLE) {
+    let target = ev.target;
+    while (!target.classList.contains("param-holder")) {
+      target = target.parentElement;
+    }
+    const paramHolderId = target.dataset.id;
+    const paramHolder = findParamHolderById(paramHolderId, program);
+    paramHolder.value = dragEventData.variable;
+  } else {
+    console.error("Unknown drag event type", dragEventData);
+  }
 }
 
 function exportPython(program) {
