@@ -142,6 +142,7 @@ class VariableAssignmentBlock extends Block {
     super("assign-variable", undefined);
     this.variable = variable;
     this.value = value;
+    this.expression = undefined;
   }
 
   serialize() {
@@ -149,6 +150,7 @@ class VariableAssignmentBlock extends Block {
       ...super.serialize(),
       variable: this.variable,
       value: this.value,
+      expression: this.expression ? this.expression.serialize() : undefined,
     };
   }
 
@@ -168,21 +170,30 @@ class VariableAssignmentBlock extends Block {
       nameInput.value = this.variable.name;
     }
 
+    const expressionEl = block.querySelector(".expression");
     const valueInput = block.querySelector(".variable-value-input");
-    valueInput.onchange = (e) => {
-      this.value = e.target.value;
-      renderWorkspace(program);
-      renderProgram(program);
-    };
-    if (this.value) {
-      block.querySelector(".variable-value-input").value = this.value;
+    if (this.expression) {
+      expressionEl.innerHTML = this.expression.render().outerHTML;
+      valueInput.style.display = "none";
+    } else {
+      valueInput.onchange = (e) => {
+        this.value = e.target.value;
+        renderWorkspace(program);
+        renderProgram(program);
+      };
+      if (this.value) {
+        block.querySelector(".variable-value-input").value = this.value;
+      }
+      expressionEl.style.display = "none";
+      valueInput.ondrop = dropAssignment;
     }
 
     return block;
   }
 
   writeCode() {
-    return `${this.variable.name} = ${this.value}`;
+    const rhs = this.expression ? this.expression.writeCode() : this.value;
+    return `${this.variable.name} = ${rhs}`;
   }
 }
 
@@ -444,7 +455,7 @@ function createBlock(blockData) {
     const { moduleName, name, parameters } = blockData;
     block = new FunctionBlock(moduleName, name, parameters);
   } else if (blockData.type === "assign-variable") {
-    const { variable, value } = blockData;
+    const { value } = blockData;
     const variableBlock = new VariableBlock(getNewUnusedVariableName());
     variables.push(variableBlock);
     block = new VariableAssignmentBlock(variableBlock, value);
@@ -468,7 +479,7 @@ function dropWorkspace(ev) {
 
   if (dragEventData.type === DRAG_EVENT_TYPE.NEW_BLOCK) {
     const blockData = dragEventData.block_data;
-    block = createBlock(blockData);
+    const block = createBlock(blockData);
     program.push(block);
 
     renderWorkspace(program);
@@ -539,7 +550,7 @@ function dropBlock(ev) {
 
   if (dragEventData.type === DRAG_EVENT_TYPE.NEW_BLOCK) {
     const blockData = dragEventData.block_data;
-    block = createBlock(blockData);
+    const block = createBlock(blockData);
 
     // get target block
     let eventTarget = ev.target;
@@ -557,6 +568,31 @@ function dropBlock(ev) {
   } else {
     console.error("Unknown drag event type", dragEventData);
   }
+}
+
+function dropAssignment(ev) {
+  ev.preventDefault();
+  resetDrag();
+
+  const inputField = ev.target;
+  const assignmentBlockEl = inputField.parentElement;
+  const assignmentBlockData = JSON.parse(assignmentBlockEl.dataset.data);
+  const assignmentBlock = program.find(
+    (block) => block.id === assignmentBlockData.id
+  );
+  if (dragEventData.type === DRAG_EVENT_TYPE.USE_VARIABLE) {
+    assignmentBlock.expression = dragEventData.variable;
+  } else if (dragEventData.type === DRAG_EVENT_TYPE.NEW_BLOCK) {
+    const blockData = dragEventData.block_data;
+    const block = createBlock(blockData);
+    assignmentBlock.expression = block;
+  } else {
+    console.error("Unknown drag event type", dragEventData);
+    return;
+  }
+
+  renderWorkspace(program);
+  renderProgram(program);
 }
 
 function exportPython(program) {

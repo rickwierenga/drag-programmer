@@ -100,3 +100,8 @@ code {
   background-color: #f0f0f0;
   border: 2px dashed black;
 }
+
+.block[data-type="assign-variable"] .expression,
+.block[data-type="assign-variable"] .expression > .block {
+  display: inline-block;
+}
