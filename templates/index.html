@@ -105,6 +105,18 @@
       </div>
     </template>
 
+    <template id="block-template-binary-operator">
+      <div
+        class="block block-binary-operator"
+        draggable="true"
+        data-type="binary-operator"
+      >
+        <span class="left"></span>
+        <span class="operator"></span>
+        <span class="right"></span>
+      </div>
+    </template>    
+
     <script src="{{ url_for('static', filename='main.js') }}"></script>
     <script
       src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"

@@ -13,6 +13,7 @@ class Block {
       type: this.type,
       moduleName: this.moduleName,
       children: this.children.map((child) => child.serialize()),
+      parameters: this.parameters.map((param) => param.serialize()),
     };
   }
 
@@ -72,7 +73,6 @@ class FunctionBlock extends Block {
     return {
       ...super.serialize(),
       name: this.name,
-      parameters: this.parameters.map((param) => param.serialize()),
     };
   }
 
@@ -141,6 +141,12 @@ class VariableAssignmentBlock extends Block {
     this.variable = variable;
     this.value = value;
     this.expression = undefined;
+  }
+
+  setExpression(expression) {
+    this.value = undefined;
+    this.expression = expression;
+    if (expression) this.children = [expression];
   }
 
   serialize() {
@@ -276,6 +282,42 @@ class RangeForLoopBlock extends Block {
   }
 }
 
+class BinaryOperatorBlock extends Block {
+  constructor(module, operator) {
+    super("binary-operator", module);
+    this.operator = operator;
+    this.left = new ParameterHolder(crypto.randomUUID(), "left", undefined);
+    this.right = new ParameterHolder(crypto.randomUUID(), "right", undefined);
+    this.parameters = [this.left, this.right];
+  }
+
+  serialize() {
+    return {
+      ...super.serialize(),
+      operator: this.operator,
+    };
+  }
+
+  render() {
+    const template = document.getElementById("block-template-binary-operator");
+    const block = template.content.cloneNode(true).querySelector(".block");
+
+    block.dataset.data = JSON.stringify(this.serialize());
+
+    block.querySelector(".operator").textContent = this.operator;
+    block.querySelector(".left").appendChild(this.left.render());
+    block.querySelector(".right").appendChild(this.right.render());
+
+    return block;
+  }
+
+  writeCode() {
+    return `${this.left.writeCode()} ${
+      this.operator
+    } ${this.right.writeCode()}`;
+  }
+}
+
 // sidebar
 
 function addBlockToSidebar(module, block) {
@@ -336,6 +378,11 @@ function addGlobalModule() {
     { name: "value", value: undefined },
   ]);
   addBlockToSidebar(globalModule, printBlock);
+
+  addBlockToSidebar(globalModule, new BinaryOperatorBlock(undefined, "+"));
+  addBlockToSidebar(globalModule, new BinaryOperatorBlock(undefined, "-"));
+  addBlockToSidebar(globalModule, new BinaryOperatorBlock(undefined, "*"));
+  addBlockToSidebar(globalModule, new BinaryOperatorBlock(undefined, "/"));
 
   document.getElementById("modules").appendChild(globalModule);
 }
@@ -445,7 +492,9 @@ function allowDrop(ev) {
       ev.target.parentElement.classList.contains("block-variable")) &&
     dragEventData.type === DRAG_EVENT_TYPE.USE_VARIABLE
   ) {
-    let target = ev.target.classList.contains("block-variable") ? ev.target : ev.target.parentElement;
+    let target = ev.target.classList.contains("block-variable")
+      ? ev.target
+      : ev.target.parentElement;
     target.classList.add("drag-over");
   }
 }
@@ -470,6 +519,9 @@ function createBlock(blockData) {
     const loopVariable = new VariableBlock(getNewUnusedVariableName());
     block = new RangeForLoopBlock(loopVariable);
     variables.push(loopVariable);
+  } else if (blockData.type === "binary-operator") {
+    const { moduleName, operator } = blockData;
+    block = new BinaryOperatorBlock(moduleName, operator);
   } else {
     throw new Error("Unknown block type", blockData);
   }
@@ -542,6 +594,8 @@ function dropParam(ev) {
     let block = findParamHolderById(paramId, program);
     if (block) {
       block.value = dragEventData.variable;
+    } else {
+      console.error("Could not find block with id", paramId);
     }
 
     renderWorkspace(program);
@@ -588,11 +642,11 @@ function dropAssignment(ev) {
     (block) => block.id === assignmentBlockData.id
   );
   if (dragEventData.type === DRAG_EVENT_TYPE.USE_VARIABLE) {
-    assignmentBlock.expression = dragEventData.variable;
+    assignmentBlock.setExpression(dragEventData.variable);
   } else if (dragEventData.type === DRAG_EVENT_TYPE.NEW_BLOCK) {
     const blockData = dragEventData.block_data;
     const block = createBlock(blockData);
-    assignmentBlock.expression = block;
+    assignmentBlock.setExpression(block);
   } else {
     console.error("Unknown drag event type", dragEventData);
     return;
