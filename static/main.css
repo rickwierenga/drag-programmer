@@ -12,7 +12,7 @@
 #workspace {
   border: 2px solid #000;
   padding: 10px;
-  height: 300px;
+  height: 600px;
   overflow: auto;
 }
 #workspace.drag-over {
@@ -91,15 +91,18 @@ code {
   border: 2px dashed #ff00ff;
 }
 
-.block-range-for-loop .code-holder {
+.code-holder {
   padding: 10px;
   border: 1px dashed black;
   margin-top: 10px;
 }
-.block-range-for-loop .code-holder .no-code {
+.code-holder .no-code {
   padding: 20px;
 }
-.block-range-for-loop.drag-over .code-holder {
+.code-holder .block:last-child {
+  margin-bottom: 20px;
+}
+.drag-over .code-holder {
   background-color: #f0f0f0;
   border: 2px dashed black;
 }

@@ -319,6 +319,56 @@ class BinaryOperatorBlock extends Block {
   }
 }
 
+class WhileLoopBlock extends Block {
+  constructor() {
+    super("while-loop", undefined);
+    this.condition = new ParameterHolder(
+      crypto.randomUUID(),
+      "condition",
+      undefined
+    );
+    this.parameters = [this.condition];
+  }
+
+  serialize() {
+    return {
+      ...super.serialize(),
+      condition: this.condition ? this.condition.serialize() : undefined,
+    };
+  }
+
+  render() {
+    const template = document.getElementById("block-template-while-loop");
+    const block = template.content.cloneNode(true).querySelector(".block");
+
+    block.dataset.data = JSON.stringify(this.serialize());
+
+    const conditionEl = block.querySelector(".param-holder-condition");
+    conditionEl.appendChild(this.condition.render());
+
+    let codeHolder = block.querySelector(".code-holder");
+    if (this.children.length > 0) {
+      codeHolder.querySelector(".no-code").style.display = "none";
+      codeHolder.innerHTML = "";
+      for (const child of this.children) {
+        codeHolder.appendChild(child.render());
+      }
+    } else {
+      codeHolder.querySelector(".no-code").style.display = "block";
+    }
+
+    block.ondragover = allowDrop;
+    block.ondrop = dropBlock;
+
+    return block;
+  }
+
+  writeCode() {
+    const body = this.children.map((child) => child.writeCode()).join("\n  ");
+    return `while ${this.condition.writeCode()}:\n  ${body}`;
+  }
+}
+
 // sidebar
 
 function addBlockToSidebar(module, block) {
@@ -375,6 +425,8 @@ function addGlobalModule() {
   let rangeForLoopBlock = new RangeForLoopBlock(undefined);
   addBlockToSidebar(globalModule, rangeForLoopBlock);
 
+  addBlockToSidebar(globalModule, new WhileLoopBlock(undefined));
+
   let printBlock = new FunctionBlock(undefined, "print", [
     { name: "value", value: undefined },
   ]);
@@ -384,6 +436,11 @@ function addGlobalModule() {
   addBlockToSidebar(globalModule, new BinaryOperatorBlock(undefined, "-"));
   addBlockToSidebar(globalModule, new BinaryOperatorBlock(undefined, "*"));
   addBlockToSidebar(globalModule, new BinaryOperatorBlock(undefined, "/"));
+
+  addBlockToSidebar(globalModule, new BinaryOperatorBlock(undefined, "=="));
+  addBlockToSidebar(globalModule, new BinaryOperatorBlock(undefined, "!="));
+  addBlockToSidebar(globalModule, new BinaryOperatorBlock(undefined, ">"));
+  addBlockToSidebar(globalModule, new BinaryOperatorBlock(undefined, "<"));
 
   document.getElementById("modules").appendChild(globalModule);
 }
@@ -523,6 +580,8 @@ function createBlock(blockData) {
   } else if (blockData.type === "binary-operator") {
     const { moduleName, operator } = blockData;
     block = new BinaryOperatorBlock(moduleName, operator);
+  } else if (blockData.type === "while-loop") {
+    block = new WhileLoopBlock();
   } else {
     throw new Error("Unknown block type", blockData);
   }
@@ -641,9 +700,7 @@ function dropAssignmentLHS(ev) {
     const inputField = ev.target;
     const assignmentBlockEl = inputField.parentElement;
     const assignmentBlockData = JSON.parse(assignmentBlockEl.dataset.data);
-    const assignmentBlock = program.find(
-      (block) => block.id === assignmentBlockData.id
-    );
+    const assignmentBlock = findBlock(assignmentBlockData.id, program);
     assignmentBlock.variable = dragEventData.variable;
 
     renderWorkspace(program);
@@ -660,9 +717,7 @@ function dropAssignmentRHS(ev) {
   const inputField = ev.target;
   const assignmentBlockEl = inputField.parentElement;
   const assignmentBlockData = JSON.parse(assignmentBlockEl.dataset.data);
-  const assignmentBlock = program.find(
-    (block) => block.id === assignmentBlockData.id
-  );
+  const assignmentBlock = findBlock(assignmentBlockData.id, program);
   if (dragEventData.type === DRAG_EVENT_TYPE.USE_VARIABLE) {
     assignmentBlock.setExpression(dragEventData.variable);
   } else if (dragEventData.type === DRAG_EVENT_TYPE.NEW_BLOCK) {
