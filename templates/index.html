@@ -139,6 +139,25 @@
       </div>
     </template>
 
+    <template id="block-template-if">
+      <div
+        class="block block-if"
+        draggable="true"
+        data-type="if"
+      >
+        if
+        <span class="param-holder-condition"></span>
+        :
+
+        <div class="code-holder">
+          <div class="no-code">
+            <i class="bi bi-plus-square"></i>
+            add code here
+          </div>
+        </div>
+      </div>
+    </template>
+
     <script src="{{ url_for('static', filename='main.js') }}"></script>
     <script
       src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
