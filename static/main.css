@@ -8,6 +8,8 @@
 #modules {
   padding: 10px;
   border: 2px solid #000;
+  overflow-y: scroll;
+  max-height: 100vh;
 }
 #workspace {
   border: 2px solid #000;
@@ -24,6 +26,10 @@ code {
   background-color: #f9f9f9;
   padding: 10px;
   margin-top: 10px;
+}
+
+#workspace .block:last-child {
+  margin-bottom: 20px;
 }
 
 #modules .module {
@@ -102,7 +108,7 @@ code {
 .code-holder .block:last-child {
   margin-bottom: 20px;
 }
-.drag-over .code-holder {
+.block.drag-over .code-holder {
   background-color: #f0f0f0;
   border: 2px dashed black;
 }

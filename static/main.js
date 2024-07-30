@@ -554,6 +554,9 @@ function resetDrag() {
   for (const paramHolder of document.querySelectorAll(".block-variable")) {
     paramHolder.classList.remove("drag-over");
   }
+  for (const block of document.querySelectorAll(".block")) {
+    block.classList.remove("drag-over");
+  }
 }
 
 const DRAG_EVENT_TYPE = {
@@ -585,7 +588,9 @@ function allowDrop(ev) {
   resetDrag();
   if (
     (ev.target.id === "workspace" ||
-      ev.target.dataset.type === "range-for-loop") &&
+      ev.target.dataset.type === "range-for-loop" ||
+      ev.target.dataset.type === "while-loop" ||
+      ev.target.dataset.type === "if") &&
     dragEventData.type === DRAG_EVENT_TYPE.NEW_BLOCK
   ) {
     ev.target.classList.add("drag-over");
@@ -603,6 +608,16 @@ function allowDrop(ev) {
       ? ev.target
       : ev.target.parentElement;
     target.classList.add("drag-over");
+  } else if (
+    ev.target.classList.contains("code-holder") &&
+    dragEventData.type === DRAG_EVENT_TYPE.NEW_BLOCK
+  ) {
+    ev.target.parentElement.classList.add("drag-over");
+  } else if (
+    ev.target.classList.contains("no-code") &&
+    dragEventData.type === DRAG_EVENT_TYPE.NEW_BLOCK
+  ) {
+    ev.target.parentElement.parentElement.classList.add("drag-over");
   }
 }
 
